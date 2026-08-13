@@ -186,6 +186,8 @@ function makeCtx(overrides = {}) {
   check("client uses official PAT terminology", raw.includes("Fine-grained Personal Access Token"));
   check("client card embeds PAT creation tutorial", raw.includes("Generate new token") && raw.includes("Administration") && raw.includes("Contents"));
   check("client keeps token write-only (no echo)", raw.includes('type: "password"'));
+  check("client uses fresh snapshot objects (re-render fix)", raw.includes("state = {") && raw.includes("getSnapshot: function () { return state; }"));
+  check("client binds a decode override", raw.includes("decode: function (section)"));
   check("client avoids cross-plugin imports", !/\brequire\(\s*["']@deepseek-ai\/(?!.*react)/.test(raw) || true); // informational
 }
 
