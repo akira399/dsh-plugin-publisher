@@ -25,7 +25,6 @@ npx -p @deepseek-ai/dsh dsh plugin --profile web add github:akira399/dsh-plugin-
 
 安装完成后**重启 DSH**（重新运行 `dsh web`）。
 
-> 本插件不依赖、也不提供任何第三方"插件市场"；发现与安装一律走官方 `dsh plugin` 命令。
 
 ## 启用与配置（图形化，推荐）
 
