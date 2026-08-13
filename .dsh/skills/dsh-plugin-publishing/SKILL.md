@@ -1,6 +1,6 @@
 ---
 name: dsh-plugin-publishing
-description: DeepSeek Harness (DSH) 插件开发与 GitHub 发布完整工作流技能。用于把技能/功能打包成 DSH 插件（cordis 插件、零依赖、consent 授权门禁、可选设置页 GUI 卡片），本地验证，发布到 GitHub（建公开仓库、打标签、推送），并在 DSH 设置页中通过图形化开关与 GitHub PAT 输入框启用。含隐私红线、免责声明与超时处理。注意：本技能由 dsh-plugin-publisher 插件提供，只有用户在设置页显式启用后才会注册。
+description: DeepSeek Harness (DSH) 插件开发与 GitHub 发布完整工作流技能。用于把技能/功能打包成 DSH 插件（cordis 插件、零依赖、可选设置页 GUI 卡片），本地验证，发布到 GitHub（建公开仓库、打标签、推送），并在 DSH 设置页中通过图形化开关与 GitHub PAT 输入框控制启用。含隐私红线、免责声明与超时处理。注意：本技能由 dsh-plugin-publisher 插件提供，默认启用，用户可在设置页随时停用。
 whenToUse: 当需要开发一个新的 DSH 插件、把已有技能打包成插件、发布插件到 GitHub，或复现"插件开发→验证→发布"全流程时。也用于指导在 DSH 设置页配置插件启用状态与 GitHub PAT（Fine-grained Personal Access Token）。
 ---
 
@@ -8,7 +8,7 @@ whenToUse: 当需要开发一个新的 DSH 插件、把已有技能打包成插�
 
 ## 0. 铁律（动手前必读）
 
-1. **用户授权门禁**：创建公开仓库、推送代码、修改 GitHub 上的任何东西，都是**写操作**。开始前必须获得用户明确同意（确认目标账号、仓库名、公开可见性）。用户未授权时只做只读调研与本地构建。本技能所在的插件也受授权门禁保护：**默认关闭**，用户必须在 DSH 设置页（设置 → 插件配置 → dsh-plugin-publisher）中显式「启用」才会注册；GitHub PAT 也在同一卡片中由用户自愿填写。
+1. **用户授权门禁**：创建公开仓库、推送代码、修改 GitHub 上的任何东西，都是**写操作**。开始前必须获得用户明确同意（确认目标账号、仓库名、公开可见性）。用户未授权时只做只读调研与本地构建。本技能所在的插件**默认启用**（设置页可随时停用，停用后技能注销）；「默认启用」不等于「自动执行写操作」——每次发布操作仍需用户单独授权。
 2. **隐私红线（绝不违反）**：
    - 绝不把 token / 密钥 / 凭据 / 会话数据写进仓库、README、技能或任何提交。
    - 代码里的认证信息必须用占位符（如 `<owner>/<repo>`）；检测凭据时**不得回显 token**（只输出账号名与状态码）。
@@ -58,11 +58,11 @@ npx -y @deepseek-ai/dsh --version   # dsh CLI
 - **Host-only vs 双端**：没有 Web 需求就不要写 client；需要设置页 GUI（开关/输入框）时写双端——host 注册 settings 区 + 逻辑，client 注册设置卡片（slot `settings.plugin.item`）。
 - **运行时技能注册**（`ctx.skills.register`）契约：`{ name, description, whenToUse?, content, source, invocation?, resourceBase? }`；`source` 必须是非空字符串；`content` 传 frontmatter 剥离后的正文；返回 disposer，用 `ctx.effect(() => disposer, label)` 绑定生命周期。同名技能 first-wins（项目层 > 运行时层）。
 - **零依赖策略**：只用 Node 内置模块 + 注入的 service，`package.json` 不写 dependencies/peerDependencies → 安装时无需解析任何第三方包。
-- **consent 授权门禁（设置页驱动）**：插件注册 settings 命名空间（如 `dsh-plugin-publisher`，字段 `enabled`）；host 用 `ctx.inject(["settings"])` + `sctx.settings.register(ns, schema, { base })` 读取当前值并 `scope.watch()` 响应变更；`enabled` 为 true 才注册技能/执行逻辑，默认 false。组合配置里的 `consent` 键作为 base 层兜底（无 GUI 环境可用）。涉及公开发布的插件必须如此。
-- **设置 schema 免依赖写法**：不 import schemastery，用最小可调用对象：
+- **consent 授权门禁（设置页驱动，opt-out）**：插件注册 settings 命名空间（如 `dsh-plugin-publisher`，字段 `enabled`）；host 用 `ctx.inject(["settings"])` + `sctx.settings.register(ns, schema, { base })` 读取当前值并 `scope.watch()` 响应变更。**`enabled` 默认 true（默认启用）**，设置文档中保存的选择跨刷新持久；只有用户显式停用（GUI 取消勾选、或 `consent: false`/`enabled: false` 覆盖）才注销技能。涉及公开发布的插件建议保留该开关（默认值可依产品决策设为开或关）。
+- **设置 schema 免依赖写法**：不 import schemastery，用最小可调用对象（默认值按产品决策设置，如 opt-out 用 true）：
   ```js
   const schema = Object.assign(
-    (value) => ({ enabled: Boolean(value?.enabled ?? value?.consent ?? false) }),
+    (value) => ({ enabled: Boolean(value?.enabled ?? value?.consent ?? true) }),
     { toJSON: () => ({ type: "object", dict: { enabled: { type: "boolean" } } }) }
   );
   ```
@@ -128,20 +128,21 @@ npx -y @deepseek-ai/dsh --version   # dsh CLI
   npx -p @deepseek-ai/dsh dsh plugin --profile web add github:<owner>/<repo>
   ```
   安装完成后**重启 dsh web**。
-- **启用（图形化）**：DSH Web GUI → **设置 → 插件配置 → dsh-plugin-publisher** 卡片：
-  1. 勾选「启用技能」→ 保存 → 技能 `dsh-plugin-publishing` 立即注册（无需重启）。
-  2. 在「GitHub PAT」输入框粘贴 Fine-grained PAT → 保存 → 插件自动同步到系统 Git 凭据管理器，`git push` 直接可用（内容不回显）。
-- **启用（配置兜底，无 GUI 环境）**：在 profile 的 `cordis.patch.yml` 加直接覆盖条目（勿用 `- insert:`）：
+- **启用状态（图形化）**：DSH Web GUI → **设置 → 插件配置 → dsh-plugin-publisher** 卡片：
+  - 技能**默认启用**，保存后刷新保持启用状态；
+  - 停用：取消勾选「启用技能」→ 保存 → 技能注销（设置文档持久化 `enabled: false`）；
+  - 在「GitHub PAT」输入框粘贴 Fine-grained PAT → 保存 → 插件自动同步到系统 Git 凭据管理器，`git push` 直接可用（内容不回显）。
+- **停用（配置兜底，无 GUI 环境）**：在 profile 的 `cordis.patch.yml` 加直接覆盖条目（勿用 `- insert:`）：
   ```yaml
   - id: dsh-plugin-publisher
     name: dsh-plugin-publisher
     config:
-      consent: true
+      consent: false
   ```
   或写入设置文档（`~/.dsh/settings.yaml`）：
   ```yaml
   dsh-plugin-publisher:
-    enabled: true
+    enabled: false
   ```
 - 插件本体不提供、也不依赖任何第三方"插件市场"；发现/安装一律走官方 `dsh plugin` 命令。
 

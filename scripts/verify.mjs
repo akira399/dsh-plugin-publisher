@@ -57,11 +57,12 @@ if (existsSync(SKILL_FILE)) {
 const host = await import(pathToFileURL(HOST).href);
 
 // Minimal schema mirror for the mock settings scope (same resolution logic).
+// DEFAULT: enabled (opt-out) — only an explicit false disables it.
 const schemaOf = (base, section) => ({
   enabled: Boolean(
     (section && section.enabled !== void 0 ? section.enabled : void 0) ??
-    (base && base.consent !== void 0 ? base.consent : false) ??
-    false
+    (base && base.consent !== void 0 ? base.consent : void 0) ??
+    true
   )
 });
 
@@ -125,16 +126,24 @@ function makeCtx(overrides = {}) {
   };
 }
 
-// 3a. consent=false (base) -> not registered
+// 3a. default (no config, no section) -> REGISTERED (opt-out default)
+{
+  const m = makeCtx();
+  host.apply(m.ctx, {});
+  check("settings namespace registered", m.registered.ns === "dsh-plugin-publisher");
+  check("no config -> no base override", m.registered.base === void 0);
+  check("default (no config) -> skill REGISTERED", m.skills.length === 1);
+}
+
+// 3b. consent=false (base) -> not registered
 {
   const m = makeCtx();
   host.apply(m.ctx, { consent: false });
-  check("settings namespace registered", m.registered.ns === "dsh-plugin-publisher");
   check("settings base honors config.consent=false", m.registered.base?.consent === false);
   check("consent=false -> skill NOT registered", m.skills.length === 0);
 }
 
-// 3b. consent=true -> registered
+// 3c. consent=true -> registered
 {
   const m = makeCtx();
   host.apply(m.ctx, { consent: true });
@@ -148,22 +157,21 @@ function makeCtx(overrides = {}) {
   check("skill has resourceBase directory", skill?.resourceBase?.kind === "directory");
 }
 
-// 3c. settings user-layer change drives register/unregister
+// 3d. settings user-layer change drives register/unregister (opt-out)
 {
   const m = makeCtx();
-  host.apply(m.ctx, { consent: false });
-  m.setSection({ enabled: true });
-  check("enabled=true via settings -> skill registered", m.skills.length === 1);
+  host.apply(m.ctx, {}); // default enabled
+  check("default enabled -> registered", m.skills.length === 1);
   m.setSection({ enabled: false });
   check("enabled=false via settings -> skill unregistered (disposer called)", m.skills.length >= 1);
   m.setSection({ enabled: true });
   check("re-enable registers again", m.skills.length === 2);
 }
 
-// 3d. credential listener
+// 3e. credential listener
 {
   const m = makeCtx();
-  host.apply(m.ctx, { consent: false });
+  host.apply(m.ctx, {});
   check("credentials/updated listener attached", m.listeners.credentials.length === 1);
 }
 

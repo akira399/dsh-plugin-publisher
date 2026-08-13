@@ -1,24 +1,22 @@
 # dsh-plugin-publisher bundle patch: mounts the plugin into the host composition
 # of a dsh profile.
 #
-# ⚠️ CONSENT GATE: the skill is ONLY registered when the user enables it. The
-# recommended path is the GUI settings card (设置 → 插件配置 → dsh-plugin-publisher
-# → 「启用技能」), which writes `enabled: true` into the settings document.
-# The `consent` key below is only the composition base layer (fallback for
-# headless/no-GUI environments) — the GUI toggle overrides it.
+# ⚠️ ENABLEMENT (opt-out): the skill is ENABLED BY DEFAULT and stays enabled
+# across refreshes. The GUI settings card (设置 → 插件配置 → dsh-plugin-publisher
+# → 「启用技能」) persists the choice in the settings document; only an explicit
+# uncheck (or a `consent: false` override) disables it. No config is needed
+# here — an absent `config` simply inherits the schema default (enabled).
 #
-# Enable without GUI (direct override entry — do NOT use `- insert:` for an
+# Disable without GUI (direct override entry — do NOT use `- insert:` for an
 # existing row, duplicate ids fail to boot):
 #   - id: dsh-plugin-publisher
 #     name: dsh-plugin-publisher
 #     config:
-#       consent: true
+#       consent: false
 # Or write into the settings document (`~/.dsh/settings.yaml`):
 #   dsh-plugin-publisher:
-#     enabled: true
+#     enabled: false
 # Then restart dsh.
 - insert:
     - id: dsh-plugin-publisher
       name: dsh-plugin-publisher
-      config:
-        consent: false

@@ -2,9 +2,9 @@
 
 DeepSeek Harness（DSH）插件开发与 GitHub 发布工作流插件（双端：Host + 设置页 GUI）。
 
-安装并**在设置页显式启用**后，插件会把内置的 **`dsh-plugin-publishing`** 技能注册到会话：AI 可据此独立完成「把技能打包成 DSH 插件 → 本地验证 → 发布到 GitHub」的完整流程。
+安装后插件会把内置的 **`dsh-plugin-publishing`** 技能注册到会话（**默认启用**）：AI 可据此独立完成「把技能打包成 DSH 插件 → 本地验证 → 发布到 GitHub」的完整流程。
 
-> ⚠️ **授权门禁（Consent Gate）**：本技能驱动的操作会**创建公开 GitHub 仓库并推送代码**，因此插件默认**不注册任何技能**。必须由你在 DSH 设置页（**设置 → 插件配置 → dsh-plugin-publisher**）中主动「启用」，并（可选）填入自己的 GitHub PAT。见下方「启用与配置」。
+> ⚠️ **启用状态（opt-out）**：技能**默认启用**，保存后刷新仍保持启用；只有你在 DSH 设置页（**设置 → 插件配置 → dsh-plugin-publisher**）主动取消勾选「启用技能」并保存后才会停用。「默认启用」不等于「自动发布」——每次创建公开仓库/推送代码前，AI 仍会先征得你的明确同意。可在同一卡片（可选）填入自己的 GitHub PAT。
 
 ## 技能内容
 
@@ -26,16 +26,16 @@ npx -p @deepseek-ai/dsh dsh plugin --profile web add github:akira399/dsh-plugin-
 安装完成后**重启 DSH**（重新运行 `dsh web`）。
 
 
-## 启用与配置（图形化，推荐）
+## 启用状态与配置（图形化）
 
 重启后打开 DSH Web GUI → **设置 → 插件配置 → dsh-plugin-publisher** 卡片：
 
-1. **启用技能**：勾选开关 → 点「保存」。技能 `dsh-plugin-publishing` 立即注册（无需再次重启），关闭即注销。
+1. **启用技能**：**默认勾选（启用）**，保存后刷新保持启用；要停用请取消勾选 → 点「保存」，技能即注销。
 2. **GitHub PAT（可选）**：在「GitHub PAT」输入框粘贴你的 **Fine-grained Personal Access Token（PAT）** → 点「保存」。插件会自动把它同步到**系统 Git 凭据管理器**，之后 `git push`/`git clone` 直接可用；内容**永不回显**，只写入 DSH 凭据存储与系统凭据管理器。
 
 效果即时生效；可用性说明：
 
-- 保存「启用」后，会话技能目录中即出现 `dsh-plugin-publishing`；用它时 AI 仍会先征得你对每次发布操作的明确同意。
+- 技能启用时，会话技能目录中即出现 `dsh-plugin-publishing`；用它时 AI 仍会先征得你对每次发布操作的明确同意。
 - 若未填 PAT，技能照常可用——AI 会优先使用系统已有的 Git 凭据，没有则向你询问。
 
 ### 如何创建 GitHub PAT（Fine-grained Personal Access Token）
@@ -58,20 +58,20 @@ npx -p @deepseek-ai/dsh dsh plugin --profile web add github:akira399/dsh-plugin-
 
 ### 配置兜底（无 GUI 环境，如 headless）
 
-在 profile 的 `cordis.patch.yml` 加**直接覆盖条目**（勿用 `- insert:`，同 id 会启动失败）：
+默认即启用，无需任何配置。要停用，在 profile 的 `cordis.patch.yml` 加**直接覆盖条目**（勿用 `- insert:`，同 id 会启动失败）：
 
 ```yaml
 - id: dsh-plugin-publisher
   name: dsh-plugin-publisher
   config:
-    consent: true
+    consent: false
 ```
 
 或写入设置文档 `~/.dsh/settings.yaml`：
 
 ```yaml
 dsh-plugin-publisher:
-  enabled: true
+  enabled: false
 ```
 
 ## 验证
@@ -80,7 +80,7 @@ dsh-plugin-publisher:
 pnpm verify
 ```
 
-检查：host/client 语法、SKILL.md 完整性、consent 门禁（false 不注册 / true 注册）、settings 区注册与变更联动、凭据监听、客户端 bundle 契约、隐私扫描。
+检查：host/client 语法、SKILL.md 完整性、启用状态（默认启用 / 显式停用注销）、settings 区注册与变更联动、凭据监听、客户端 bundle 契约、隐私扫描。
 
 ## 免责声明
 
