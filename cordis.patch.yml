@@ -8,16 +8,18 @@
 # the user's explicit opt-in).
 #
 # Enable (pick one):
-#   1. `dsh plugin --profile web add github:<owner>/dsh-plugin-publisher`
-#      then edit `~/.dsh/profiles/web/cordis.patch.yml` and set consent under
-#      the `dsh-plugin-publisher` row:
-#        - insert:
-#            - id: dsh-plugin-publisher
-#              name: dsh-plugin-publisher
-#              config:
-#                consent: true
-#   2. Or run with a one-shot patch:
-#      dsh --patch "dsh-plugin-publisher: { consent: true }"
+#   1. Marketplace install: edit the row the market appended to
+#      `~/.dsh/profiles/web/cordis.patch.yml` and add `config.consent: true`
+#      under the `dsh-plugin-publisher` entry.
+#   2. `dsh plugin add` install: the row lives in this bundle layer, so add a
+#      DIRECT override entry (no `- insert:` — duplicate ids fail to boot) to
+#      the profile's `cordis.patch.yml`:
+#        - id: dsh-plugin-publisher
+#          name: dsh-plugin-publisher
+#          config:
+#            consent: true
+#   3. One-shot (no persist): write that direct entry to `enable.yml` and run
+#      `dsh web --patch ./enable.yml`
 # Then restart dsh.
 - insert:
     - id: dsh-plugin-publisher

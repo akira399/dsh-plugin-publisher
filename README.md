@@ -33,7 +33,11 @@ npx -p @deepseek-ai/dsh dsh plugin --profile web add github:<owner>/dsh-plugin-p
 
 ## 开启授权（必须，否则插件不工作）
 
-编辑 `~/.dsh/profiles/web/cordis.patch.yml`，在 `dsh-plugin-publisher` 行下加 `config`（整段替换，只有这一个键，直接写即可）：
+> ⚠️ **两种安装方式，启用写法不同**（区别在于行是"已存在"还是"需覆盖"）：
+
+### 方式一安装（市场）：编辑市场已注册的行
+
+市场安装会在 `~/.dsh/profiles/web/cordis.patch.yml` 里追加一行 `dsh-plugin-publisher`。找到它并加上 `config`：
 
 ```yaml
 - insert:
@@ -43,9 +47,28 @@ npx -p @deepseek-ai/dsh dsh plugin --profile web add github:<owner>/dsh-plugin-p
         consent: true
 ```
 
-保存后**重启 DSH**。之后会话中会出现可用技能 `dsh-plugin-publishing`；用它时 AI 仍会先征得你对每次发布操作的明确同意。
+保存后**重启 DSH**。
 
-也可以临时开启（不落盘）：`dsh --patch "dsh-plugin-publisher: { consent: true }"`。
+### 方式二安装（命令行 `dsh plugin add`）：添加直接覆盖条目
+
+行来自插件的 bundle 层，**不要**用 `- insert:`（会因 id 重复导致启动失败），要在 profile 的 `cordis.patch.yml` 末尾添加**直接条目**：
+
+```yaml
+- id: dsh-plugin-publisher
+  name: dsh-plugin-publisher
+  config:
+    consent: true
+```
+
+### 一次性开启（不落盘）
+
+把上面的直接条目写进一个文件（如 `enable.yml`），然后：
+
+```sh
+dsh web --patch ./enable.yml
+```
+
+之后会话中会出现可用技能 `dsh-plugin-publishing`；用它时 AI 仍会先征得你对每次发布操作的明确同意。
 
 ## 验证
 

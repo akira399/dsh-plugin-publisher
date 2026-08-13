@@ -44,7 +44,8 @@ npx -y @deepseek-ai/dsh --version   # dsh CLI
 - **Bundle**：作者分发的包，`package.json` 的 `dsh.bundle.patch` 指向配置层。
 - **Profile**：用户运行的组合，`dsh.profile.bundles` 保存有序 bundle 列表；**不要手写**用户 profile manifest。
 - **Patch 层**（`cordis.patch.yml`，顶层数组）：`- insert: - id: <行id>, name: <包名>, config: {...}`；`id` 是稳定行身份，后层按 id 整段替换 config。
-- **生效顺序**：profile bundles → profile cordis.patch.yml → `$DSH_HOME/cordis.patch.yml` → 命令行 `--patch`（后者胜）。
+- **insert 与覆盖是两种条目**：`- insert:` 用于**新增**行；对已存在的行改配置必须用**直接条目** `- id: <行id>, name: <包名>, config: {...}`（同 id 再 insert 会启动失败 `duplicate loader entry id`）。市场安装的插件行在 profile 的 cordis.patch.yml 里，直接编辑该行加 config 即可；bundle 安装的插件行在包内，需在 profile 补直接覆盖条目。
+- **生效顺序**：profile bundles → profile cordis.patch.yml → `$DSH_HOME/cordis.patch.yml` → 命令行 `--patch <文件路径>`（后者胜；`--patch` 只接受文件路径，可重复）。
 - **Host-only 插件**：不声明 `dsh.client`，不构建 client bundle；只需 `inject` 需要的 service（如 `["skills"]`）。
 - **运行时技能注册**（`ctx.skills.register`）契约：`{ name, description, whenToUse?, content, source, invocation?, resourceBase? }`；`source` 必须是非空字符串；`content` 传 frontmatter 剥离后的正文（与文件系统技能一致）；返回 disposer，用 `ctx.effect(() => disposer, label)` 绑定生命周期。同名技能 first-wins（项目层 > 运行时层）。
 - **零依赖策略**：只用 Node 内置模块 + 注入的 service，`package.json` 不写 dependencies/peerDependencies → 插件市场安装时跳过 npm install、无生命周期脚本确认弹窗。
@@ -127,6 +128,7 @@ npx -y @deepseek-ai/dsh --version   # dsh CLI
 | 克隆后 verify 失败（CRLF） | 加 `.gitattributes` 锁 LF 并 `git add --renormalize` 后重新推送 |
 | token 无建仓权限 | 停止 API 建仓，询问用户建仓方式（手动建空仓/换 token） |
 | 市场安装被拒（依赖/脚本） | 零依赖插件无此问题；有依赖时需用户确认 npm 脚本 |
+| 启动报 `duplicate loader entry id: <插件名>` | 对已存在行用了 `- insert:`；改成直接覆盖条目（见 §3 patch 层） |
 | 误提交隐私 | 立即从工作区与远端历史处理：改内容 → `git commit --amend`/新提交 → `git push --force`（需用户授权）；token 立即到 GitHub 撤销（常见 `ghp`/`gho`/`github_pat` 开头） |
 
 ## 9. 完成标准
