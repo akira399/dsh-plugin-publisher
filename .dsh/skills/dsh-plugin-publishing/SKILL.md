@@ -1,14 +1,14 @@
 ---
 name: dsh-plugin-publishing
-description: DeepSeek Harness (DSH) 插件开发与 GitHub 发布完整工作流技能。用于把技能/功能打包成 DSH 插件（cordis 插件、零依赖、consent 授权门禁、可选设置页 GUI 卡片），本地验证，发布到 GitHub（建公开仓库、打标签、推送），并在 DSH 设置页中通过图形化开关与 GitHub Token 输入框启用。含隐私红线、免责声明与超时处理。注意：本技能由 dsh-plugin-publisher 插件提供，只有用户在设置页显式启用后才会注册。
-whenToUse: 当需要开发一个新的 DSH 插件、把已有技能打包成插件、发布插件到 GitHub，或复现"插件开发→验证→发布"全流程时。也用于指导在 DSH 设置页配置插件启用状态与 GitHub Token。
+description: DeepSeek Harness (DSH) 插件开发与 GitHub 发布完整工作流技能。用于把技能/功能打包成 DSH 插件（cordis 插件、零依赖、consent 授权门禁、可选设置页 GUI 卡片），本地验证，发布到 GitHub（建公开仓库、打标签、推送），并在 DSH 设置页中通过图形化开关与 GitHub PAT 输入框启用。含隐私红线、免责声明与超时处理。注意：本技能由 dsh-plugin-publisher 插件提供，只有用户在设置页显式启用后才会注册。
+whenToUse: 当需要开发一个新的 DSH 插件、把已有技能打包成插件、发布插件到 GitHub，或复现"插件开发→验证→发布"全流程时。也用于指导在 DSH 设置页配置插件启用状态与 GitHub PAT（Fine-grained Personal Access Token）。
 ---
 
 # DSH 插件开发与 GitHub 发布工作流
 
 ## 0. 铁律（动手前必读）
 
-1. **用户授权门禁**：创建公开仓库、推送代码、修改 GitHub 上的任何东西，都是**写操作**。开始前必须获得用户明确同意（确认目标账号、仓库名、公开可见性）。用户未授权时只做只读调研与本地构建。本技能所在的插件也受授权门禁保护：**默认关闭**，用户必须在 DSH 设置页（设置 → 插件配置 → dsh-plugin-publisher）中显式「启用」才会注册；GitHub Token 也在同一卡片中由用户自愿填写。
+1. **用户授权门禁**：创建公开仓库、推送代码、修改 GitHub 上的任何东西，都是**写操作**。开始前必须获得用户明确同意（确认目标账号、仓库名、公开可见性）。用户未授权时只做只读调研与本地构建。本技能所在的插件也受授权门禁保护：**默认关闭**，用户必须在 DSH 设置页（设置 → 插件配置 → dsh-plugin-publisher）中显式「启用」才会注册；GitHub PAT 也在同一卡片中由用户自愿填写。
 2. **隐私红线（绝不违反）**：
    - 绝不把 token / 密钥 / 凭据 / 会话数据写进仓库、README、技能或任何提交。
    - 代码里的认证信息必须用占位符（如 `<owner>/<repo>`）；检测凭据时**不得回显 token**（只输出账号名与状态码）。
@@ -37,7 +37,15 @@ npx -y @deepseek-ai/dsh --version   # dsh CLI
   Invoke-RestMethod -Uri "https://api.github.com/user" -Headers @{Authorization="Bearer $tok"}
   # 建一个 private 探测仓再删除，确认建仓权限
   ```
-- 若用户已在 DSH 设置页填过 GitHub Token（`GITHUB_TOKEN` 凭据，dsh-plugin-publisher 会自动同步到系统 Git 凭据管理器），则 `git push` 直接可用，无需再向用户索要。
+- 若用户已在 DSH 设置页填过 GitHub PAT（内部凭据引用名 `GITHUB_TOKEN`，dsh-plugin-publisher 会自动同步到系统 Git 凭据管理器），则 `git push` 直接可用，无需再向用户索要。
+- **GitHub PAT 创建与所需权限**（官方叫法：Fine-grained Personal Access Token）：
+  1. GitHub → 右上角头像 → Settings → 最底部 Developer settings → Personal access tokens → Fine-grained tokens → Generate new token
+  2. 填写名称（如 `dsh-publish`）与有效期；**Repository access 选择 All repositories**（因为需要创建新仓库，无法预先指定一个不存在的仓库）
+  3. 在 **Permissions → Repository permissions** 中授予：
+     - **Contents: Read and write** —— 推送代码（git push / HTTPS）
+     - **Administration: Read and write** —— 通过 API 创建/删除仓库、设置 Topics
+     - **Metadata: Read** —— 自动包含，保持开启
+  4. 点 Generate token 后复制（**只显示一次**）；Fine-grained PAT 形如 `github_pat` 开头（后接下划线与一长串随机字符），与 classic PAT（`ghp` 开头）不同。凭据引用名 `GITHUB_TOKEN` 只是内部名，实际存放的是这个 PAT。
 - 无任何可用凭据 → **停下来询问用户**提供方式（PAT / gh CLI 登录 / SSH），不自行猜测。
 
 ## 2. DSH 插件架构速查（契约）
@@ -87,7 +95,7 @@ npx -y @deepseek-ai/dsh --version   # dsh CLI
 1. `node --check lib/index.js` 与 `node --check lib/client.js`（语法）。
 2. `scripts/verify.mjs`：mock `ctx` 断言——host apply 正常、`inject` 含所需服务、技能名/描述/正文/resourceBase 正确、正文已剥离 frontmatter；**consent=false 时不得注册，consent=true 时注册**；settings 区注册（`settings.register` 被调用、schema 可解析、watch 变更后技能注册/注销）；`credentials/updated` 监听已挂；client bundle 可解析、`exports.inject` 含 slots/settingsScope；隐私扫描（token/邮箱/绝对路径）。
 3. **组合测试**（不启动 LLM）：`npx -y @deepseek-ai/dsh plugin --profile scratch add <本地路径>` → `npx -y @deepseek-ai/dsh --profile scratch --dump-config`，确认出现插件行与 client 声明。
-   - ⚠️ 教训：scratch profile 只有 base 组合，**没有 agent 运行器，不能跑任务**——运行时验证要用 `headless` profile。
+   - 注意：scratch profile 只含 base 组合、**没有 agent 运行器，不能跑任务**——它只用于组合/配置检查，运行时验证请用 `headless` profile。
 4. **运行时验证**（真实激活）：`npx -y @deepseek-ai/dsh plugin --profile headless add <路径或 github:owner/repo>` → `npx -y @deepseek-ai/dsh --profile headless "询问可用技能目录是否包含 <skill-name>"`。门禁插件先测 off（base consent=false → NOT_AVAILABLE），再测 on（consent=true 或 settings 文档 enabled=true → AVAILABLE）。
    - headless 任务耗时长属正常（LLM 调用），后台跑；超 4 分钟无输出先查进程/会话日志，必要时 kill 换前台短任务。
 5. 全部通过后再进入发布。
@@ -122,7 +130,7 @@ npx -y @deepseek-ai/dsh --version   # dsh CLI
   安装完成后**重启 dsh web**。
 - **启用（图形化）**：DSH Web GUI → **设置 → 插件配置 → dsh-plugin-publisher** 卡片：
   1. 勾选「启用技能」→ 保存 → 技能 `dsh-plugin-publishing` 立即注册（无需重启）。
-  2. 在「GitHub Token」输入框粘贴 PAT → 保存 → 插件自动同步到系统 Git 凭据管理器，`git push` 直接可用（内容不回显）。
+  2. 在「GitHub PAT」输入框粘贴 Fine-grained PAT → 保存 → 插件自动同步到系统 Git 凭据管理器，`git push` 直接可用（内容不回显）。
 - **启用（配置兜底，无 GUI 环境）**：在 profile 的 `cordis.patch.yml` 加直接覆盖条目（勿用 `- insert:`）：
   ```yaml
   - id: dsh-plugin-publisher
@@ -141,7 +149,7 @@ npx -y @deepseek-ai/dsh --version   # dsh CLI
 
 - 安装插件=信任该仓库：npm/pnpm 生命周期脚本会在机器上执行（如有）；只安装已审查的仓库。
 - 发布操作（建仓/推送/topic）**必须**在用户明确授权后进行；本技能不自动执行任何写操作。
-- GitHub Token 只写入 DSH 凭据存储与系统 Git 凭据管理器，插件不记录、不回显、不上传任何数据。
+- GitHub PAT 只写入 DSH 凭据存储与系统 Git 凭据管理器，插件不记录、不回显、不上传任何数据。
 - 免责声明模板见 §0.3，README 必须包含。
 
 ## 8. 常见问题与超时处理
@@ -154,12 +162,12 @@ npx -y @deepseek-ai/dsh --version   # dsh CLI
 | 启用开关保存后技能不出现 | 检查 `~/.dsh/settings.yaml` 中 `dsh-plugin-publisher.enabled` 是否落盘；确认 host 日志无注册错误 |
 | 克隆后 verify 失败（CRLF） | 加 `.gitattributes` 锁 LF 并 `git add --renormalize` 后重新推送 |
 | 启动报 `duplicate loader entry id: <插件名>` | 对已存在行用了 `- insert:`；改成直接覆盖条目（见 §2 patch 层） |
-| token 无建仓权限 | 停止 API 建仓，询问用户建仓方式（手动建空仓/换 token） |
+| PAT 无建仓权限 | 停止 API 建仓，询问用户建仓方式（手动建空仓/换 PAT） |
 | 误提交隐私 | 立即从工作区与远端历史处理：改内容 → `git commit --amend`/新提交 → `git push --force`（需用户授权）；token 立即到 GitHub 撤销（常见 `ghp`/`gho`/`github_pat` 开头） |
 
 ## 9. 完成标准
 
 - 环境就绪、零依赖插件构建完成、本地与运行时验证全过（含 consent off/on 两种状态）。
 - 隐私扫描无 token/邮箱/本地路径/用户名；README 含授权说明与免责声明。
-- 双端插件：host 逻辑 + client 设置卡片（开关 + Token 输入）齐全；设置变更即时生效。
+- 双端插件：host 逻辑 + client 设置卡片（开关 + GitHub PAT 输入）齐全；设置变更即时生效。
 - 仓库公开、推送成功、克隆验证通过；用户已获知设置页启用步骤。

@@ -4,7 +4,7 @@ DeepSeek Harness（DSH）插件开发与 GitHub 发布工作流插件（双端�
 
 安装并**在设置页显式启用**后，插件会把内置的 **`dsh-plugin-publishing`** 技能注册到会话：AI 可据此独立完成「把技能打包成 DSH 插件 → 本地验证 → 发布到 GitHub」的完整流程。
 
-> ⚠️ **授权门禁（Consent Gate）**：本技能驱动的操作会**创建公开 GitHub 仓库并推送代码**，因此插件默认**不注册任何技能**。必须由你在 DSH 设置页（**设置 → 插件配置 → dsh-plugin-publisher**）中主动「启用」，并（可选）填入自己的 GitHub Token。见下方「启用与配置」。
+> ⚠️ **授权门禁（Consent Gate）**：本技能驱动的操作会**创建公开 GitHub 仓库并推送代码**，因此插件默认**不注册任何技能**。必须由你在 DSH 设置页（**设置 → 插件配置 → dsh-plugin-publisher**）中主动「启用」，并（可选）填入自己的 GitHub PAT。见下方「启用与配置」。
 
 ## 技能内容
 
@@ -32,12 +32,30 @@ npx -p @deepseek-ai/dsh dsh plugin --profile web add github:akira399/dsh-plugin-
 重启后打开 DSH Web GUI → **设置 → 插件配置 → dsh-plugin-publisher** 卡片：
 
 1. **启用技能**：勾选开关 → 点「保存」。技能 `dsh-plugin-publishing` 立即注册（无需再次重启），关闭即注销。
-2. **GitHub Token（可选）**：在「GitHub Token」输入框粘贴你的 PAT → 点「保存」。插件会自动把它同步到**系统 Git 凭据管理器**，之后 `git push`/`git clone` 直接可用；Token 内容**永不回显**，只写入 DSH 凭据存储与系统凭据管理器。
+2. **GitHub PAT（可选）**：在「GitHub PAT」输入框粘贴你的 **Fine-grained Personal Access Token（PAT）** → 点「保存」。插件会自动把它同步到**系统 Git 凭据管理器**，之后 `git push`/`git clone` 直接可用；内容**永不回显**，只写入 DSH 凭据存储与系统凭据管理器。
 
 效果即时生效；可用性说明：
 
 - 保存「启用」后，会话技能目录中即出现 `dsh-plugin-publishing`；用它时 AI 仍会先征得你对每次发布操作的明确同意。
-- 若未填 Token，技能照常可用——AI 会优先使用系统已有的 Git 凭据，没有则向你询问。
+- 若未填 PAT，技能照常可用——AI 会优先使用系统已有的 Git 凭据，没有则向你询问。
+
+### 如何创建 GitHub PAT（Fine-grained Personal Access Token）
+
+1. 打开 GitHub → 右上角头像 → **Settings**
+2. 左侧最底部 **Developer settings** → **Personal access tokens** → **Fine-grained tokens**
+3. 点 **Generate new token**，填写名称（如 `dsh-publish`）与有效期
+4. **Repository access** 选择 **All repositories**（因为需要创建新仓库，无法预先指定一个不存在的仓库）
+5. 在 **Permissions → Repository permissions** 中授予：
+
+| 权限 | 访问级别 | 用途 |
+| --- | --- | --- |
+| Contents | Read and write | 推送代码（git push / HTTPS） |
+| Administration | Read and write | 通过 API 创建/删除仓库、设置 Topics |
+| Metadata | Read | 自动包含（必选，保持开启） |
+
+6. 点 **Generate token**，复制（**只显示一次**）后粘贴到设置卡片的输入框
+
+> Fine-grained PAT 形如 `github_pat` 开头（后接下划线与一长串随机字符），与旧的 classic PAT（`ghp` 开头）不同。本插件只把它写入系统 Git 凭据管理器用于推送，不会回显或上传。
 
 ### 配置兜底（无 GUI 环境，如 headless）
 
@@ -69,7 +87,7 @@ pnpm verify
 
 - 本插件及内置技能仅提供开发与发布流程的**操作指引**；所有写操作（创建公开仓库、推送代码、修改 topics）**必须由用户明确授权后**才会执行。
 - **公开发布不可撤回**：代码、描述一旦推送到公开仓库即对外可见，请自行评估并提前做隐私扫描；发布后 GitHub 历史中的任何泄露信息都可能被复制。
-- 本插件按「现状」（AS-IS）提供，不收集、不上传任何用户数据；GitHub Token 只写入 DSH 凭据存储与系统 Git 凭据管理器，插件不记录、不回显。因使用本插件或其引导的发布行为造成的任何损失由使用者自行承担。
+- 本插件按「现状」（AS-IS）提供，不收集、不上传任何用户数据；GitHub PAT 只写入 DSH 凭据存储与系统 Git 凭据管理器，插件不记录、不回显。因使用本插件或其引导的发布行为造成的任何损失由使用者自行承担。
 - 安装插件即信任该仓库（安装过程可能执行包内的 npm/pnpm 生命周期脚本），请只安装你已审查的仓库。
 
 ## 文件结构
@@ -79,7 +97,7 @@ dsh-plugin-publisher/
 ├── package.json          # cordis 插件清单（零依赖，dsh.bundle.patch + dsh.client）
 ├── cordis.patch.yml      # 配置层（consent: false 默认，作设置 base 兜底）
 ├── lib/index.js          # Host：consent 门禁 + settings 区 + 凭据→Git 凭据管理器 + 技能注册
-├── lib/client.js         # Client：设置页卡片（启用开关 + Token 输入，write-only）
+├── lib/client.js         # Client：设置页卡片（启用开关 + GitHub PAT 输入，write-only）
 ├── .dsh/skills/dsh-plugin-publishing/SKILL.md   # 工作流技能本体
 ├── scripts/verify.mjs    # 验证脚本
 └── README.md / LICENSE

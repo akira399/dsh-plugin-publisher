@@ -49,6 +49,8 @@ if (existsSync(SKILL_FILE)) {
   check("SKILL.md contains disclaimer", raw.includes("免责声明"));
   check("SKILL.md teaches GUI enablement", raw.includes("设置 → 插件配置") || raw.includes("settings.plugin.item"));
   check("SKILL.md no longer teaches market install", !raw.includes("插件市场安装"));
+  check("SKILL.md uses official PAT terminology", raw.includes("Fine-grained Personal Access Token"));
+  check("SKILL.md documents PAT permissions", raw.includes("Contents: Read and write") && raw.includes("Administration: Read and write"));
 }
 
 // 3. Host behavior with mocked services
@@ -173,6 +175,8 @@ function makeCtx(overrides = {}) {
   check("client exports apply", raw.includes("exports.apply"));
   check("client injects slots+settingsScope+connection", raw.includes('exports.inject = ["slots"') && raw.includes("settingsScope"));
   check("client registers settings.plugin.item card", raw.includes('"settings.plugin.item"'));
+  check("client uses official PAT terminology", raw.includes("Fine-grained Personal Access Token"));
+  check("client card embeds PAT creation tutorial", raw.includes("Generate new token") && raw.includes("Administration") && raw.includes("Contents"));
   check("client keeps token write-only (no echo)", raw.includes('type: "password"'));
   check("client avoids cross-plugin imports", !/\brequire\(\s*["']@deepseek-ai\/(?!.*react)/.test(raw) || true); // informational
 }
