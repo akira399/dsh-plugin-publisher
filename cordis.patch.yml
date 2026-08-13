@@ -1,0 +1,26 @@
+# dsh-plugin-publisher bundle patch: mounts the plugin into the host composition
+# of a dsh profile.
+#
+# ⚠️ CONSENT GATE: the skill is ONLY registered when `config.consent` is true.
+# The default is false — the plugin stays inert until the user explicitly
+# enables it (this is intentional: the skill drives operations that create
+# public GitHub repositories and push code, so it must never activate without
+# the user's explicit opt-in).
+#
+# Enable (pick one):
+#   1. `dsh plugin --profile web add github:<owner>/dsh-plugin-publisher`
+#      then edit `~/.dsh/profiles/web/cordis.patch.yml` and set consent under
+#      the `dsh-plugin-publisher` row:
+#        - insert:
+#            - id: dsh-plugin-publisher
+#              name: dsh-plugin-publisher
+#              config:
+#                consent: true
+#   2. Or run with a one-shot patch:
+#      dsh --patch "dsh-plugin-publisher: { consent: true }"
+# Then restart dsh.
+- insert:
+    - id: dsh-plugin-publisher
+      name: dsh-plugin-publisher
+      config:
+        consent: false

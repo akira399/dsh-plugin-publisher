@@ -1,0 +1,31 @@
+{
+  "name": "dsh-plugin-publisher",
+  "version": "1.0.0",
+  "description": "DSH plugin development & GitHub publishing workflow skill for DeepSeek Harness (DSH). A consent-gated host plugin that registers the `dsh-plugin-publishing` skill — the full workflow for developing a DSH plugin, verifying it, publishing it to GitHub with the `dsh-plugin` topic, and making it visible in the DSH plugin marketplace. The skill is only registered after the user explicitly enables `config.consent`.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    ".dsh/skills/dsh-plugin-publishing/SKILL.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "verify": "node scripts/verify.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}
