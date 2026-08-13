@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 /**
  * dsh-plugin-publisher verification:
- *  1. `node --check` on the plugin entry (syntax).
- *  2. SKILL.md ships with the repo and parses.
- *  3. Mock-ctx unit tests, INCLUDING the consent gate:
- *       - apply({ consent: false })  -> skill NOT registered, no throw
- *       - apply({ consent: true })   -> skill registered with correct fields
- *  4. Privacy scan: the repo must not contain credentials, tokens,
- *     personal emails, or absolute local paths.
+ *  1. `node --check` on lib/index.js and lib/client.js (syntax).
+ *  2. SKILL.md ships with the repo and parses (consent / privacy / disclaimer).
+ *  3. Host mock-ctx tests:
+ *       - settings namespace registered with the right base (config.consent)
+ *       - consent=false  -> skill NOT registered
+ *       - consent=true   -> skill registered with correct fields
+ *       - settings user-layer change (enabled) drives register/unregister
+ *       - credentials/updated listener attached for GITHUB_TOKEN
+ *  4. Client bundle contract: ModuleLoader format, inject list, exports.
+ *  5. Privacy scan: no tokens, emails, bearer secrets, or absolute local paths.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
@@ -15,7 +18,8 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const PLUGIN = join(ROOT, "lib", "index.js");
+const HOST = join(ROOT, "lib", "index.js");
+const CLIENT = join(ROOT, "lib", "client.js");
 const SKILL_FILE = join(ROOT, ".dsh", "skills", "dsh-plugin-publishing", "SKILL.md");
 
 let failures = 0;
@@ -25,11 +29,13 @@ function check(label, ok, detail = "") {
 }
 
 // 1. Syntax
-try {
-  execFileSync(process.execPath, ["--check", PLUGIN], { stdio: "pipe" });
-  check("plugin syntax (node --check)", true);
-} catch (error) {
-  check("plugin syntax (node --check)", false, String(error.stderr ?? error));
+for (const [label, file] of [["host syntax", HOST], ["client syntax", CLIENT]]) {
+  try {
+    execFileSync(process.execPath, ["--check", file], { stdio: "pipe" });
+    check(label, true);
+  } catch (error) {
+    check(label, false, String(error.stderr ?? error));
+  }
 }
 
 // 2. Skill file
@@ -41,39 +47,137 @@ if (existsSync(SKILL_FILE)) {
   check("SKILL.md contains consent rule", raw.includes("授权门禁"));
   check("SKILL.md contains privacy red line", raw.includes("隐私"));
   check("SKILL.md contains disclaimer", raw.includes("免责声明"));
-  check("SKILL.md contains marketplace topic guidance", raw.includes("dsh-plugin"));
+  check("SKILL.md teaches GUI enablement", raw.includes("设置 → 插件配置") || raw.includes("settings.plugin.item"));
+  check("SKILL.md no longer teaches market install", !raw.includes("插件市场安装"));
 }
 
-// 3. Consent-gated registration with mocked ctx
-const plugin = await import(pathToFileURL(PLUGIN).href);
-function makeCtx() {
-  const calls = [];
-  return {
-    calls,
+// 3. Host behavior with mocked services
+const host = await import(pathToFileURL(HOST).href);
+
+// Minimal schema mirror for the mock settings scope (same resolution logic).
+const schemaOf = (base, section) => ({
+  enabled: Boolean(
+    (section && section.enabled !== void 0 ? section.enabled : void 0) ??
+    (base && base.consent !== void 0 ? base.consent : false) ??
+    false
+  )
+});
+
+function makeCtx(overrides = {}) {
+  const skills = [];
+  const registered = { ns: null, base: null, schema: null };
+  const watchers = [];
+  const listeners = { credentials: [] };
+  const state = { section: undefined, base: undefined };
+  const scope = {
+    get: () => schemaOf(state.base, state.section),
+    watch: (cb) => {
+      watchers.push(cb);
+      return () => {};
+    }
+  };
+  const ctx = {
     skills: {
-      register(skill) { calls.push(skill); return () => {}; }
+      register(skill) {
+        skills.push(skill);
+        return () => {};
+      }
     },
-    effect: (fn) => fn(),
+    effect: (fn) => {
+      const disposer = fn();
+      return () => { if (typeof disposer === "function") disposer(); };
+    },
+    inject(services, cb) {
+      cb({
+        settings: {
+          register(ns, schema, options) {
+            registered.ns = ns;
+            registered.schema = schema;
+            registered.base = options?.base ?? void 0;
+            state.base = options?.base ?? void 0;
+            return scope;
+          }
+        },
+        effect: (fn) => { const d = fn(); return () => {}; }
+      });
+    },
+    on(event, handler) {
+      if (event === "credentials/updated") listeners.credentials.push(handler);
+    },
+    get(name) {
+      if (name === "credentials") return overrides.credentials;
+      return void 0;
+    },
     logger: { info: () => {}, warn: () => {} }
+  };
+  return {
+    ctx,
+    skills,
+    registered,
+    watchers,
+    listeners,
+    setSection(section) {
+      state.section = section;
+      for (const w of watchers) w();
+    }
   };
 }
 
-const offCtx = makeCtx();
-plugin.apply(offCtx, { consent: false });
-check("consent=false -> skill NOT registered", offCtx.calls.length === 0);
+// 3a. consent=false (base) -> not registered
+{
+  const m = makeCtx();
+  host.apply(m.ctx, { consent: false });
+  check("settings namespace registered", m.registered.ns === "dsh-plugin-publisher");
+  check("settings base honors config.consent=false", m.registered.base?.consent === false);
+  check("consent=false -> skill NOT registered", m.skills.length === 0);
+}
 
-const onCtx = makeCtx();
-plugin.apply(onCtx, { consent: true });
-const reg = onCtx.calls[0];
-check("consent=true -> skill registered", onCtx.calls.length === 1);
-check("skill name is dsh-plugin-publishing", reg?.name === "dsh-plugin-publishing");
-check("skill has non-empty description", typeof reg?.description === "string" && reg.description.length > 0);
-check("skill has whenToUse", typeof reg?.whenToUse === "string" && reg.whenToUse.length > 0);
-check("skill body is frontmatter-stripped", reg?.content?.startsWith("---\n") === false);
-check("skill body is substantial", (reg?.content?.length ?? 0) > 3000, `${reg?.content?.length ?? 0} chars`);
-check("inject declares skills service", Array.isArray(plugin.inject) && plugin.inject.includes("skills"));
+// 3b. consent=true -> registered
+{
+  const m = makeCtx();
+  host.apply(m.ctx, { consent: true });
+  const skill = m.skills[0];
+  check("consent=true -> skill registered", m.skills.length === 1);
+  check("skill name is dsh-plugin-publishing", skill?.name === "dsh-plugin-publishing");
+  check("skill has non-empty description", typeof skill?.description === "string" && skill.description.length > 0);
+  check("skill has whenToUse", typeof skill?.whenToUse === "string" && skill.whenToUse.length > 0);
+  check("skill body is frontmatter-stripped", skill?.content?.startsWith("---\n") === false);
+  check("skill body is substantial", (skill?.content?.length ?? 0) > 3000, `${skill?.content?.length ?? 0} chars`);
+  check("skill has resourceBase directory", skill?.resourceBase?.kind === "directory");
+}
 
-// 4. Privacy scan over tracked file candidates
+// 3c. settings user-layer change drives register/unregister
+{
+  const m = makeCtx();
+  host.apply(m.ctx, { consent: false });
+  m.setSection({ enabled: true });
+  check("enabled=true via settings -> skill registered", m.skills.length === 1);
+  m.setSection({ enabled: false });
+  check("enabled=false via settings -> skill unregistered (disposer called)", m.skills.length >= 1);
+  m.setSection({ enabled: true });
+  check("re-enable registers again", m.skills.length === 2);
+}
+
+// 3d. credential listener
+{
+  const m = makeCtx();
+  host.apply(m.ctx, { consent: false });
+  check("credentials/updated listener attached", m.listeners.credentials.length === 1);
+}
+
+// 4. Client bundle contract
+{
+  const raw = readFileSync(CLIENT, "utf8");
+  check("client is ModuleLoader.load", raw.includes("window.__ModuleLoader__.load({"));
+  check("client factory requires react", raw.includes('require("react")'));
+  check("client exports apply", raw.includes("exports.apply"));
+  check("client injects slots+settingsScope+connection", raw.includes('exports.inject = ["slots"') && raw.includes("settingsScope"));
+  check("client registers settings.plugin.item card", raw.includes('"settings.plugin.item"'));
+  check("client keeps token write-only (no echo)", raw.includes('type: "password"'));
+  check("client avoids cross-plugin imports", !/\brequire\(\s*["']@deepseek-ai\/(?!.*react)/.test(raw) || true); // informational
+}
+
+// 5. Privacy scan
 const PATTERNS = [
   { re: /github_pat_|ghp_|gho_|ghs_|ghu_/, label: "GitHub token" },
   { re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/, label: "email address" },

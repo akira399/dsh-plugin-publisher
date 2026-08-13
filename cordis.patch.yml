@@ -1,25 +1,21 @@
 # dsh-plugin-publisher bundle patch: mounts the plugin into the host composition
 # of a dsh profile.
 #
-# ⚠️ CONSENT GATE: the skill is ONLY registered when `config.consent` is true.
-# The default is false — the plugin stays inert until the user explicitly
-# enables it (this is intentional: the skill drives operations that create
-# public GitHub repositories and push code, so it must never activate without
-# the user's explicit opt-in).
+# ⚠️ CONSENT GATE: the skill is ONLY registered when the user enables it. The
+# recommended path is the GUI settings card (设置 → 插件配置 → dsh-plugin-publisher
+# → 「启用技能」), which writes `enabled: true` into the settings document.
+# The `consent` key below is only the composition base layer (fallback for
+# headless/no-GUI environments) — the GUI toggle overrides it.
 #
-# Enable (pick one):
-#   1. Marketplace install: edit the row the market appended to
-#      `~/.dsh/profiles/web/cordis.patch.yml` and add `config.consent: true`
-#      under the `dsh-plugin-publisher` entry.
-#   2. `dsh plugin add` install: the row lives in this bundle layer, so add a
-#      DIRECT override entry (no `- insert:` — duplicate ids fail to boot) to
-#      the profile's `cordis.patch.yml`:
-#        - id: dsh-plugin-publisher
-#          name: dsh-plugin-publisher
-#          config:
-#            consent: true
-#   3. One-shot (no persist): write that direct entry to `enable.yml` and run
-#      `dsh web --patch ./enable.yml`
+# Enable without GUI (direct override entry — do NOT use `- insert:` for an
+# existing row, duplicate ids fail to boot):
+#   - id: dsh-plugin-publisher
+#     name: dsh-plugin-publisher
+#     config:
+#       consent: true
+# Or write into the settings document (`~/.dsh/settings.yaml`):
+#   dsh-plugin-publisher:
+#     enabled: true
 # Then restart dsh.
 - insert:
     - id: dsh-plugin-publisher

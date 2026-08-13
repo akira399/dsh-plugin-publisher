@@ -1,11 +1,12 @@
 {
   "name": "dsh-plugin-publisher",
-  "version": "1.0.0",
-  "description": "DSH plugin development & GitHub publishing workflow skill for DeepSeek Harness (DSH). A consent-gated host plugin that registers the `dsh-plugin-publishing` skill — the full workflow for developing a DSH plugin, verifying it, publishing it to GitHub with the `dsh-plugin` topic, and making it visible in the DSH plugin marketplace. The skill is only registered after the user explicitly enables `config.consent`.",
+  "version": "1.1.0",
+  "description": "DSH plugin development & GitHub publishing workflow plugin for DeepSeek Harness (DSH). Host: registers the `dsh-plugin-publishing` skill only after the user opts in, and bridges a GUI-entered GitHub token into the system Git credential manager. Client: a settings card on the 设置 → 插件配置 page with an enable toggle and a write-only GitHub Token field.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
+    "./client": "./lib/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
@@ -22,6 +23,13 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
     }
   },
   "license": "MIT",
