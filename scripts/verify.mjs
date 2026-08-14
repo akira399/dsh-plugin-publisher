@@ -190,8 +190,15 @@ function makeCtx(overrides = {}) {
   check("client binds a decode override", raw.includes("decode: function (section)"));
   check("client retries scope load (boot race fix)", raw.includes("ensureLoaded") && raw.includes("scope.load()"));
   check("client shows loading/unavailable status", raw.includes('"unavailable"') && raw.includes("loading"));
+  check("client exposes raw snapshot for diagnosis", raw.includes("rawValue"));
   check("client disposes controller", raw.includes("controller.dispose"));
   check("client avoids cross-plugin imports", !/\brequire\(\s*["']@deepseek-ai\/(?!.*react)/.test(raw) || true); // informational
+}
+
+// 4b. Host diagnostic route
+{
+  const hostRaw = readFileSync(HOST, "utf8");
+  check("host registers diagnostic status route", hostRaw.includes("/api/dsh-plugin-publisher/status"));
 }
 
 // 5. Privacy scan
