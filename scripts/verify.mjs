@@ -71,12 +71,17 @@ function makeCtx(overrides = {}) {
   const registered = { ns: null, base: null, schema: null };
   const watchers = [];
   const listeners = { credentials: [] };
+  const routes = [];
   const state = { section: undefined, base: undefined };
   const scope = {
     get: () => schemaOf(state.base, state.section),
     watch: (cb) => {
       watchers.push(cb);
       return () => {};
+    },
+    update: async (patch) => {
+      state.section = { ...(state.section ?? {}), ...patch };
+      for (const w of watchers) w();
     }
   };
   const ctx = {
@@ -101,6 +106,12 @@ function makeCtx(overrides = {}) {
             return scope;
           }
         },
+        webServer: {
+          register(route) {
+            routes.push(route.path);
+            return () => {};
+          }
+        },
         effect: (fn) => { const d = fn(); return () => {}; }
       });
     },
@@ -119,6 +130,7 @@ function makeCtx(overrides = {}) {
     registered,
     watchers,
     listeners,
+    routes,
     setSection(section) {
       state.section = section;
       for (const w of watchers) w();
@@ -168,11 +180,16 @@ function makeCtx(overrides = {}) {
   check("re-enable registers again", m.skills.length === 2);
 }
 
-// 3e. credential listener
+// 3e. credential listener + routes
 {
   const m = makeCtx();
   host.apply(m.ctx, {});
   check("credentials/updated listener attached", m.listeners.credentials.length === 1);
+  check("host registers status route", m.routes.includes("/api/dsh-plugin-publisher/status"));
+  check("host registers enabled route", m.routes.includes("/api/dsh-plugin-publisher/enabled"));
+  check("host registers token route", m.routes.includes("/api/dsh-plugin-publisher/token"));
+  m.setSection({ enabled: false });
+  check("host scope.update reflects via get()", m.registered.ns === "dsh-plugin-publisher");
 }
 
 // 4. Client bundle contract
@@ -181,24 +198,24 @@ function makeCtx(overrides = {}) {
   check("client is ModuleLoader.load", raw.includes("window.__ModuleLoader__.load({"));
   check("client factory requires react", raw.includes('require("react")'));
   check("client exports apply", raw.includes("exports.apply"));
-  check("client injects slots+settingsScope+connection", raw.includes('exports.inject = ["slots"') && raw.includes("settingsScope"));
+  check("client injects slots+locale only", raw.includes('exports.inject = ["slots"') && raw.includes('"locale"') && !raw.includes("settingsScope"));
   check("client registers settings.plugin.item card", raw.includes('"settings.plugin.item"'));
   check("client uses official PAT terminology", raw.includes("Fine-grained Personal Access Token"));
   check("client card embeds PAT creation tutorial", raw.includes("Generate new token") && raw.includes("Administration") && raw.includes("Contents"));
   check("client keeps token write-only (no echo)", raw.includes('type: "password"'));
   check("client uses fresh snapshot objects (re-render fix)", raw.includes("state = {") && raw.includes("getSnapshot: function () { return state; }"));
-  check("client binds a decode override", raw.includes("decode: function (section)"));
-  check("client retries scope load (boot race fix)", raw.includes("ensureLoaded") && raw.includes("scope.load()"));
+  check("client talks HTTP to host routes", raw.includes("fetch(") && raw.includes('"/api/dsh-plugin-publisher"'));
+  check("client retries load (boot race fix)", raw.includes("ensureLoaded") && raw.includes("void load().then(ensureLoaded)"));
   check("client shows loading/unavailable status", raw.includes('"unavailable"') && raw.includes("loading"));
   check("client exposes raw snapshot for diagnosis", raw.includes("rawValue"));
   check("client disposes controller", raw.includes("controller.dispose"));
   check("client avoids cross-plugin imports", !/\brequire\(\s*["']@deepseek-ai\/(?!.*react)/.test(raw) || true); // informational
 }
 
-// 4b. Host diagnostic route
+// 4b. Host route code
 {
   const hostRaw = readFileSync(HOST, "utf8");
-  check("host registers diagnostic status route", hostRaw.includes("/api/dsh-plugin-publisher/status"));
+  check("host has all three routes in source", hostRaw.includes("/api/dsh-plugin-publisher/status") && hostRaw.includes("/api/dsh-plugin-publisher/enabled") && hostRaw.includes("/api/dsh-plugin-publisher/token"));
 }
 
 // 5. Privacy scan
