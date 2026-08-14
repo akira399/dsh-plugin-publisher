@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-publisher",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "DSH plugin development & GitHub publishing workflow plugin for DeepSeek Harness (DSH). Host: registers the `dsh-plugin-publishing` skill (enabled by default, opt-out), and bridges a GUI-entered GitHub PAT (fine-grained Personal Access Token) into the system Git credential manager. Client: a settings card on the 设置 → 插件配置 page with an enable toggle (persisted across refreshes), a write-only GitHub PAT field, and an embedded PAT creation tutorial with required permissions.",
   "type": "module",
   "main": "lib/index.js",
